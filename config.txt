@@ -1,0 +1,13 @@
+ECLIPSE
+catkin_make --force-cmake -G"Eclipse CDT4 - Unix Makefiles"
+
+awk -f $(rospack find mk)/eclipse.awk build/.project > build/.project_with_env && mv build/.project_with_env build/.project
+
+cmake src -DCMAKE_BUILD_TYPE=Debug
+
+
+
+QT
+#Add custom (non compiling) targets so launch scripts and python files show up in QT Creator's project view.
+file(GLOB_RECURSE EXTRA_FILES */*)
+add_custom_target(${PROJECT_NAME}_OTHER_FILES ALL WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} SOURCES ${EXTRA_FILES})
