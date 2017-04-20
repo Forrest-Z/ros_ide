@@ -243,7 +243,6 @@ static bool IsInsideFootprint(geometry_msgs::Point32 pt, geometry_msgs::Polygon 
     geometry_msgs::Point32 p1;
     geometry_msgs::Point32 p2;
     int N = bounding_polygon.points.size();
-
     p1 = bounding_polygon.points.at(0);
     for (i = 1; i <= N; i++)
     {

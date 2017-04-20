@@ -730,6 +730,7 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
     else
     {
       // The radian of the start and goal circle center
+      geometry_msgs::Vector3 vec1, vec2;
       float tempradian1, tempradian2;
       tempradian1 = startpt.z - symbol1 * M_PI / 2.0;
       tempradian2 = goalpt.z + symbol1 * M_PI / 2.0;
@@ -737,20 +738,31 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
       float c = connect.x * connect.x + connect.y * connect.y;
       float b = 2.0 * (connect.x * (cos(tempradian1) - cos(tempradian2)) + connect.y * (sin(tempradian1) - sin(tempradian2)));
       float a = -2.0 * cos(tempradian1 - tempradian2) - 2.0;
-
-      float r1 = (-b + sqrt(b * b - 4 * a * c)) / (2 * a);
-      float r2 = (-b - sqrt(b * b - 4 * a * c)) / (2 * a);
-      radius = std::max(r1, r2);
-      
+      if (fabs(a) < 1e-3)
+      {
+        radius = -c / b;
+      }
+      else
+      {
+        radius = (-b - sqrt(b * b - 4 * a * c)) / (2 * a);
+      }
       thetastep = lenstep / radius;
       center1.x = startpt.x - radius * cos(tempradian1);
       center1.y = startpt.y - radius * sin(tempradian1);
       center2.x = goalpt.x - radius * cos(tempradian2);
       center2.y = goalpt.y - radius * sin(tempradian2);
-      float start2goal = atan2(center2.y - center1.y, center2.x - center1.x);
-      float goal2start = atan2(center1.y - center2.y, center1.x - center2.x);
-      radiandiff1 = fabs(start2goal - tempradian1);
-      radiandiff2 = fabs(goal2start - tempradian2);
+      vec1.x = center2.x - center1.x;
+      vec1.y = center2.y - center1.y;
+      vec2.x = center1.x - center2.x;
+      vec2.y = center1.y - center2.y;
+      // The judge flag is quite essential
+      float flag1 = cos(startpt.z) * vec1.x + sin(startpt.z) * vec1.y;
+      float flag2 = cos(goalpt.z) * vec2.x + sin(goalpt.z) * vec2.y;
+      float d = sqrt(vec1.x * vec1.x + vec1.y * vec1.y);
+      radiandiff1 = acos((vec1.x * cos(tempradian1) + vec1.y * sin(tempradian1)) / d);
+      radiandiff1 = (flag1 >= 0.0) ? radiandiff1 : (2 * M_PI - radiandiff1);
+      radiandiff2 = acos((vec2.x * cos(tempradian2) + vec2.y * sin(tempradian2)) / d);
+      radiandiff2 = (flag2 <= 0.0) ? radiandiff2 : (2 * M_PI - radiandiff2);
       length = (radiandiff1 + radiandiff2) * radius;
       float radian1 = 0.0;
       while (radian1 <= radiandiff1)
@@ -758,9 +770,9 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         temp.x = center1.x + radius * cos(tempradian1);
         temp.y = center1.y + radius * sin(tempradian1);
         temp.z = startpt.z + symbol1 * radian1;
-        tempradian1 += symbol1 * thetastep;
-        radian1 += thetastep;
         pts.push_back(temp);
+        tempradian1 += symbol1 * thetastep;
+        radian1 += thetastep;  
       }
       std::vector<geometry_msgs::Point32> array;
       float radian2 = 0.0;
@@ -769,9 +781,9 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         temp.x = center2.x + radius * cos(tempradian2);
         temp.y = center2.y + radius * sin(tempradian2);
         temp.z = goalpt.z + symbol1 * radian2;
-        tempradian2 += symbol1 * thetastep;
-        radian2 += thetastep;
         array.push_back(temp);
+        tempradian2 += symbol1 * thetastep;
+        radian2 += thetastep; 
       }
       std::reverse(array.begin(), array.end());
       pts.insert(pts.end(), array.begin(), array.end());
@@ -809,11 +821,11 @@ float dwaplanner::heuristic(sVehicleStatus cur, sVehicleStatus goal)
   //     ReedsSheppStateSpace reeds_shepp(dubins_radius);
   //     reedsSheppCost = reeds_shepp.distance(q0, q1);
 
-  // disCost = globalpath(p1, p2, arr);
+  disCost = globalpath(p1, p2, arr);
 
   // return std::min(reedsSheppCost, dubinsCost);
 
-  return dubinsCost;
+  return disCost;
 }
 
 //The kernel function of this god-like algorithm
