@@ -30,9 +30,9 @@ dwaplanner::dwaplanner(ros::NodeHandle nh)
 
   updatingstatus = initialstatus;
 
-  goalstatus.x = 18.0;
-  goalstatus.y = 18.0;
-  goalstatus.heading = toradian(90.0);
+  goalstatus.x = 12.0;
+  goalstatus.y = 12.0;
+  goalstatus.heading = toradian(0.0);
   goalstatus.angular_velocity = toradian(0.0);
   goalstatus.linear_velocity = 0.0;
 
@@ -576,7 +576,7 @@ dwaplanner::GenerateTrajectory(sVehicleStatus currentvs, sKinematic sk)
 //This is a new distance heuristic method!!!
 float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Point32 goalpt, std::vector<geometry_msgs::Point32> &pts)
 {
-  geometry_msgs::Point32 crspt, temp, center;
+  geometry_msgs::Point32 crspt, temp, center, center1, center2;
   geometry_msgs::Vector3 connect, vec;
   float radius;
   float lenstep = 0.15;
@@ -584,7 +584,6 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
   float minradius = functions::radius;
   float tempradian;
   float length;
-  float refpos1, refpos2;
   float symbol1, symbol2;
   float radiandiff = acos(cos(startpt.z) * cos(goalpt.z) + sin(startpt.z) * sin(goalpt.z));
 
@@ -652,13 +651,14 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         center.y = goalpt.y - sin(tempradian) * radius;
         float radian = 0.0;
         float radiansum = (flag > 0.0) ? radiandiff : (2 * M_PI - radiandiff);
+        length = dis + radiansum * radius;
         while (radian <= radiansum)
         {
-          tempradian -= symbol1 * thetastep;
           temp.x = center.x + radius * cos(tempradian);
           temp.y = center.y + radius * sin(tempradian);
           temp.z = goalpt.z - symbol1 * radian;
           radian += thetastep;
+          tempradian -= symbol1 * thetastep;
           pts.push_back(temp);
         }
         std::reverse(pts.begin(), pts.end());
@@ -673,7 +673,6 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
           array.push_back(temp);
         }
         pts.insert(pts.begin(), array.begin(), array.end());
-        length = dis + radiandiff * radius;
       }
       else if (flag * (dis2 - dis1) > 1e-3)
       {
@@ -684,12 +683,13 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         center.y = startpt.y - sin(tempradian) * radius;
         float radian = 0.0;
         float radiansum = (flag > 0.0) ? radiandiff : (2 * M_PI - radiandiff);
+        length = dis + radiansum * radius;
         while (radian <= radiansum)
         {
-          tempradian += symbol1 * thetastep;
           temp.x = center.x + radius * cos(tempradian);
           temp.y = center.y + radius * sin(tempradian);
           temp.z = startpt.z + symbol1 * radian;
+          tempradian += symbol1 * thetastep;
           radian += thetastep;
           pts.push_back(temp);
         }
@@ -705,7 +705,6 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         }
         std::reverse(array.begin(), array.end());
         pts.insert(pts.end(), array.begin(), array.end());
-        length = dis + radiandiff * radius;
       }
       else
       {
@@ -716,17 +715,66 @@ float dwaplanner::globalpath(geometry_msgs::Point32 startpt, geometry_msgs::Poin
         center.y = startpt.y - sin(tempradian) * radius;
         float radian = 0.0;
         float radiansum = (flag > 0.0) ? radiandiff : (2 * M_PI - radiandiff);
+        length = dis + radiansum * radius;
         while (radian <= radiansum)
         {
-          tempradian += symbol1 * thetastep;
           temp.x = center.x + radius * cos(tempradian);
           temp.y = center.y + radius * sin(tempradian);
           temp.z = startpt.z + symbol1 * radian;
+          tempradian += symbol1 * thetastep;
           radian += thetastep;
-          pts.push_back(temp);
-          length = dis + radiandiff * radius;
+          pts.push_back(temp);  
         }
       }
+    }
+    else
+    {
+      // The radian of the start and goal circle center
+      float tempradian1, tempradian2;
+      tempradian1 = startpt.z - symbol1 * M_PI / 2.0;
+      tempradian2 = goalpt.z + symbol1 * M_PI / 2.0;
+      float radiandiff1, radiandiff2;
+      float c = connect.x * connect.x + connect.y * connect.y;
+      float b = 2.0 * (connect.x * (cos(tempradian1) - cos(tempradian2)) + connect.y * (sin(tempradian1) - sin(tempradian2)));
+      float a = -2.0 * cos(tempradian1 - tempradian2) - 2.0;
+
+      float r1 = (-b + sqrt(b * b - 4 * a * c)) / (2 * a);
+      float r2 = (-b - sqrt(b * b - 4 * a * c)) / (2 * a);
+      radius = std::max(r1, r2);
+      
+      thetastep = lenstep / radius;
+      center1.x = startpt.x - radius * cos(tempradian1);
+      center1.y = startpt.y - radius * sin(tempradian1);
+      center2.x = goalpt.x - radius * cos(tempradian2);
+      center2.y = goalpt.y - radius * sin(tempradian2);
+      float start2goal = atan2(center2.y - center1.y, center2.x - center1.x);
+      float goal2start = atan2(center1.y - center2.y, center1.x - center2.x);
+      radiandiff1 = fabs(start2goal - tempradian1);
+      radiandiff2 = fabs(goal2start - tempradian2);
+      length = (radiandiff1 + radiandiff2) * radius;
+      float radian1 = 0.0;
+      while (radian1 <= radiandiff1)
+      {
+        temp.x = center1.x + radius * cos(tempradian1);
+        temp.y = center1.y + radius * sin(tempradian1);
+        temp.z = startpt.z + symbol1 * radian1;
+        tempradian1 += symbol1 * thetastep;
+        radian1 += thetastep;
+        pts.push_back(temp);
+      }
+      std::vector<geometry_msgs::Point32> array;
+      float radian2 = 0.0;
+      while (radian2 <= radiandiff2)
+      {
+        temp.x = center2.x + radius * cos(tempradian2);
+        temp.y = center2.y + radius * sin(tempradian2);
+        temp.z = goalpt.z + symbol1 * radian2;
+        tempradian2 += symbol1 * thetastep;
+        radian2 += thetastep;
+        array.push_back(temp);
+      }
+      std::reverse(array.begin(), array.end());
+      pts.insert(pts.end(), array.begin(), array.end());
     }
   }
   return length;
